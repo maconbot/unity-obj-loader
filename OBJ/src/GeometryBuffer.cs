@@ -8,9 +8,11 @@ public class GeometryBuffer {
 	public List<Vector3> vertices;
 	public List<Vector2> uvs;
 	public List<Vector3> normals;
+	public List<Vector4> tangents;
 	public int unnamedGroupIndex = 1; // naming index for unnamed group. like "Unnamed-1"
 	
 	private ObjectData current;
+	private bool quadMode;
 	private class ObjectData {
 		public string name;
 		public List<GroupData> groups;
@@ -34,7 +36,8 @@ public class GeometryBuffer {
 		public bool isEmpty { get { return faces.Count == 0; } }
 	}
 	
-	public GeometryBuffer() {
+	public GeometryBuffer(bool quadMode = false) {
+		this.quadMode = quadMode;
 		objects = new List<ObjectData>();
 		ObjectData d = new ObjectData();
 		d.name = "default";
@@ -49,6 +52,7 @@ public class GeometryBuffer {
 		vertices = new List<Vector3>();
 		uvs = new List<Vector2>();
 		normals = new List<Vector3>();
+		tangents = new List<Vector4>();
 	}
 	
 	public void PushObject(string name) {
@@ -96,6 +100,8 @@ public class GeometryBuffer {
 	
 	public void PushNormal(Vector3 v) {
 		normals.Add(v);
+		//Naive implementation of tangent generation, rotate normals 90 degrees in x
+		tangents.Add(Quaternion.Euler(new Vector3(90, 0, 0)) * v);
 	}
 	
 	public void PushFace(FaceIndices f) {
@@ -140,6 +146,7 @@ public class GeometryBuffer {
 			Vector3[] tvertices = new Vector3[od.allFaces.Count];
 			Vector2[] tuvs = new Vector2[od.allFaces.Count];
 			Vector3[] tnormals = new Vector3[od.allFaces.Count];
+			Vector4[] ttangents = new Vector4[od.allFaces.Count];
 		
 			int k = 0;
 			foreach(FaceIndices fi in od.allFaces) {
@@ -149,14 +156,21 @@ public class GeometryBuffer {
 				}
 				tvertices[k] = vertices[fi.vi];
 				if(hasUVs) tuvs[k] = uvs[fi.vu];
-				if(hasNormals && fi.vn >= 0) tnormals[k] = normals[fi.vn];
+				if(hasNormals && fi.vn >= 0) {
+					tnormals[k] = normals[fi.vn];
+					ttangents[k] = tangents[fi.vn];
+				}
 				k++;
 			}
 		
 			Mesh m = (gs[i].GetComponent(typeof(MeshFilter)) as MeshFilter).mesh;
+			m.Clear();
 			m.vertices = tvertices;
 			if(hasUVs) m.uv = tuvs;
-			if(objectHasNormals) m.normals = tnormals;
+			if(objectHasNormals) {
+				m.normals = tnormals;
+				m.tangents = ttangents;
+			}
 			
 			if(od.groups.Count == 1) {
 				Debug.Log("PopulateMeshes only one group: "+od.groups[0].name);
@@ -172,7 +186,10 @@ public class GeometryBuffer {
 				int[] triangles = new int[gd.faces.Count];
 				for(int j = 0; j < triangles.Length; j++) triangles[j] = j;
 				
-				m.triangles = triangles;
+				if(quadMode)
+					m.SetIndices(triangles, MeshTopology.Quads, 0);
+				else
+					m.triangles = triangles;
 				
 			} else {
 				int gl = od.groups.Count;
@@ -195,7 +212,10 @@ public class GeometryBuffer {
 					int l = od.groups[j].faces.Count + c;
 					int s = 0;
 					for(; c < l; c++, s++) triangles[s] = c;
-					m.SetTriangles(triangles, j);
+					if(quadMode)
+						m.SetIndices(triangles, MeshTopology.Quads, j);
+					else
+						m.SetTriangles(triangles, j);
 				}
 				
 				gs[i].renderer.materials = materials;

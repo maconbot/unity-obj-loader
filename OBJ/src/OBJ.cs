@@ -40,10 +40,14 @@ public class OBJ : MonoBehaviour {
 	private string mtllib;
 	private GeometryBuffer buffer;
 
-	void Start ()
-	{
-		buffer = new GeometryBuffer ();
-		StartCoroutine (Load (objPath));
+	public TextAsset obj, mtl;
+	public bool quadMode;
+
+	void Start (){
+		if(objPath != ""){
+		    buffer = new GeometryBuffer(quadMode);
+		    StartCoroutine (Load (objPath));
+		}
 	}
 	
 	public IEnumerator Load(string path) {
@@ -89,6 +93,18 @@ public class OBJ : MonoBehaviour {
 		
 		Build();
 
+	}
+	public void BuildMesh() {
+		if(obj) {
+			buffer = new GeometryBuffer(quadMode);
+			SetGeometryData(obj.text);
+			if(mtl)
+				SetMaterialData(mtl.text);
+			else
+				SetMaterialData("");
+			Build();
+			//buffer.Trace();
+		}
 	}
 	
 	private WWW GetTextureLoader(MaterialData m, string texpath) {
@@ -203,12 +219,19 @@ public class OBJ : MonoBehaviour {
 						buffer.PushFace(faces[2]);
 					}
 					else if (p.Length == 5) {
-						buffer.PushFace(faces[0]);
-						buffer.PushFace(faces[1]);
-						buffer.PushFace(faces[3]);
-						buffer.PushFace(faces[3]);
-						buffer.PushFace(faces[1]);
-						buffer.PushFace(faces[2]);
+						if(quadMode) {
+							buffer.PushFace(faces[0]);
+							buffer.PushFace(faces[1]);
+							buffer.PushFace(faces[2]);
+							buffer.PushFace(faces[3]);
+						} else {
+							buffer.PushFace(faces[0]);
+							buffer.PushFace(faces[1]);
+							buffer.PushFace(faces[3]);
+							buffer.PushFace(faces[3]);
+							buffer.PushFace(faces[1]);
+							buffer.PushFace(faces[2]);
+						}
 					}
 					else {
 						Debug.LogWarning("face vertex count :"+(p.Length-1)+" larger than 4:");
@@ -463,5 +486,8 @@ public class OBJ : MonoBehaviour {
 		}
 		
 		buffer.PopulateMeshes(ms, materials);
+		//Not sure why this step is needed, but it is :(
+		if(quadMode)
+			GetComponent<MeshFilter>().mesh.SetIndices(GetComponent<MeshFilter>().mesh.GetIndices(0), MeshTopology.Quads, 0);
 	}
 }
